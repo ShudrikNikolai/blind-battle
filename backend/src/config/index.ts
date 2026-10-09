@@ -1,92 +1,84 @@
 export const configInit = () => ({
-  IS_DEV: !!process.env.IS_DEV,
+  IS_DEV: getEnvOrPanic('IS_DEV') === 'dev',
   APP: {
-    port: process.env.APP_PORT,
-    name: process.env.APP_NAME,
-    allowedOrigin: process.env.ALLOWED_ORIGIN,
-    nodeEnv: process.env.NODE_ENV,
-    baseUrl: process.env.APP_BASE_URL,
-    version: process.env.APP_GLOBAL_DEFAULT_API_VERSION,
-    globalPrefix: process.env.APP_GLOBAL_PREFIX,
-    locale: process.env.APP_LOCALE,
-    tz: process.env.TZ,
+    port: getEnvOrPanic('APP_PORT', 'number'),
+    name: getEnvOrPanic('APP_NAME'),
+    allowedOrigin: getEnvOrPanic('ALLOWED_ORIGIN'),
+    nodeEnv: getEnvOrPanic('NODE_ENV'),
+    baseUrl: getEnvOrPanic('APP_BASE_URL'),
+    version: getEnvOrPanic('APP_GLOBAL_DEFAULT_API_VERSION'),
+    globalPrefix: getEnvOrPanic('APP_GLOBAL_PREFIX'),
+    locale: getEnvOrPanic('APP_LOCALE'),
+    tz: getEnvOrPanic('TZ'),
   },
   DATABASE: {
-    port: process.env.DB_PORT,
-    host: process.env.DB_HOST,
-    type: process.env.DB_TYPE,
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
+    port: getEnvOrPanic('DB_PORT', 'number'),
+    host: getEnvOrPanic('DB_HOST'),
+    type: 'postgres' as const,
+    username: getEnvOrPanic('DB_USERNAME'),
+    password: getEnvOrPanic('DB_PASSWORD'),
+    database: getEnvOrPanic('DB_DATABASE'),
     sync: false,
     ssl: false,
     logging: false,
   },
   TELEGRAM: {
-    ADMINS_IDS: parsedAdminIds(process.env.ADMINS_IDS),
-    TOKEN: process.env.TOKEN,
+    adminIds: parsedAdminIds(getEnvOrPanic('ADMINS_IDS')),
+    token: getEnvOrPanic('TOKEN'),
   },
   CACHE: {},
   BULLMQ: {
-    HOST: process.env.BULLMQ_HOST,
-    PORT: process.env.BULLMQ_PORT,
+    host: getEnvOrPanic('BULLMQ_HOST'),
+    port: getEnvOrPanic('BULLMQ_PORT', 'number'),
   },
   AUTH: {
-    SECRET: process.env.SECRET,
-    RESAVE: false,
-    SAVE_UNINIT: false,
-    MAX_AGE: process.env.MAX_AGE,
-    HTTP_ONLY: true,
-    SECURE: false,
+    secret: getEnvOrPanic('SECRET'),
+    resave: false,
+    saveUninitialized: false,
+    maxAge: getEnvOrPanic('MAX_AGE', 'number'),
+    httpOnly: true,
+    secure: false,
+  },
+  SWAGGER: {
+    createFile: getEnvOrPanic('SWAGGER_CREATE_FILE', 'boolean'),
+    enable: getEnvOrPanic('SWAGGER_ENABLE', 'boolean'),
+    path: getEnvOrPanic('SWAGGER_PATH'),
   },
 });
 
-export interface IApp {
-  port: string;
-  name: string;
-  allowedOrigin: string;
-  nodeEnv: string;
-  baseUrl: string;
-  version: string;
-  globalPrefix: string;
-  locale: string;
-  tz: string;
-}
+const conf = configInit();
+export type TAuth = typeof conf.AUTH;
+export type TApp = typeof conf.APP;
+export type TDatabase = typeof conf.DATABASE;
+export type TTelegram = typeof conf.TELEGRAM;
+export type TCache = typeof conf.CACHE;
+export type TBullMQ = typeof conf.BULLMQ;
+export type TSwagger = typeof conf.SWAGGER;
 
-export interface IDatabase {
-  port: number;
-  host: string;
-  type: 'postgres';
-  username: string;
-  password: string;
-  database: string;
-  sync: boolean;
-  ssl: boolean;
-  logging: boolean;
-}
-
-export interface ITelegram {
-  ADMINS_IDS: number[];
-  TOKEN: string;
-}
-
-export interface ICache {}
-
-export interface IBullMQ {
-  HOST: string;
-  PORT: string;
-}
-
-export interface IAuth {
-  SECRET: string;
-  RESAVE: boolean;
-  SAVE_UNINIT: boolean;
-  MAX_AGE: string;
-  HTTP_ONLY: boolean;
-  SECURE: boolean;
-}
-
-const parsedAdminIds = (arrIds: string | undefined): number[] => {
-  if (!arrIds) return [];
+const parsedAdminIds = (arrIds: string): number[] => {
   return arrIds.split('_').map((id) => Number(id));
 };
+
+type EnvType = 'string' | 'number' | 'boolean';
+
+function getEnvOrPanic(val: string, type?: 'string'): string;
+function getEnvOrPanic(val: string, type?: 'number'): number;
+function getEnvOrPanic(val: string, type?: 'boolean'): boolean;
+function getEnvOrPanic(val: string, type?: EnvType): number | boolean | string {
+  let env = process.env[val];
+  if (!env) {
+    throw new Error('Value not found');
+  }
+
+  switch (type) {
+    case 'number': {
+      return +env;
+    }
+    case 'boolean': {
+      return env === 'true';
+    }
+    default: {
+      return env;
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { IDatabase } from '@/config';
+import { TDatabase } from '@/config';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -8,17 +8,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const cfg = config.getOrThrow<IDatabase>('DATABASE');
+        const databaseConf = config.getOrThrow<TDatabase>('DATABASE');
         return {
-          type: cfg.type,
-          host: cfg.host,
-          port: cfg.port,
-          username: cfg.username,
-          password: cfg.password,
-          database: cfg.database,
-          ssl: cfg.ssl,
+          ...databaseConf,
           synchronize: false,
-          logging: cfg.logging,
           autoLoadEntities: true,
           migrations: ['dist/infrastructure/database/migrations/*.{js,ts}'],
         };

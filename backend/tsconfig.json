@@ -19,7 +19,7 @@
       "@/common/*": ["src/common/*"],
       "@/config/*": ["src/config/*"],
       "@/infra/*": ["src/infrastructure/*"],
-      "@/modules/*": ["src/infrastructure/telegram/modules/*"],
+      "@/modules/*": ["src/infrastructure/telegraf/modules/*"],
     },
     "incremental": true,
     "skipLibCheck": true,
