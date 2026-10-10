@@ -14,3 +14,4 @@ export const API_ERROR = {
   BODY_LARGE: 'Request body is too large',
   TIMEOUT: 'HTTP request timeout',
 };
+export const SESSION_AUTH = 'session';

@@ -1,5 +1,5 @@
 export const configInit = () => ({
-  IS_DEV: getEnvOrPanic('IS_DEV') === 'dev',
+  IS_DEV: getEnvOrPanic('NODE_ENV') === 'dev',
   APP: {
     port: getEnvOrPanic('APP_PORT', 'number'),
     name: getEnvOrPanic('APP_NAME'),
@@ -46,14 +46,13 @@ export const configInit = () => ({
   },
 });
 
-const conf = configInit();
-export type TAuth = typeof conf.AUTH;
-export type TApp = typeof conf.APP;
-export type TDatabase = typeof conf.DATABASE;
-export type TTelegram = typeof conf.TELEGRAM;
-export type TCache = typeof conf.CACHE;
-export type TBullMQ = typeof conf.BULLMQ;
-export type TSwagger = typeof conf.SWAGGER;
+export type TAuth = ReturnType<typeof configInit>['AUTH'];
+export type TApp = ReturnType<typeof configInit>['APP'];
+export type TDatabase = ReturnType<typeof configInit>['DATABASE'];
+export type TTelegram = ReturnType<typeof configInit>['TELEGRAM'];
+export type TCache = ReturnType<typeof configInit>['CACHE'];
+export type TBullMQ = ReturnType<typeof configInit>['BULLMQ'];
+export type TSwagger = ReturnType<typeof configInit>['SWAGGER'];
 
 const parsedAdminIds = (arrIds: string): number[] => {
   return arrIds.split('_').map((id) => Number(id));
@@ -67,7 +66,7 @@ function getEnvOrPanic(val: string, type?: 'boolean'): boolean;
 function getEnvOrPanic(val: string, type?: EnvType): number | boolean | string {
   let env = process.env[val];
   if (!env) {
-    throw new Error('Value not found');
+    throw new Error(`Value not found ${val} - ${env}`);
   }
 
   switch (type) {

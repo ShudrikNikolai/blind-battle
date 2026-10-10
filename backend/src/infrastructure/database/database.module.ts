@@ -1,8 +1,10 @@
 import { TDatabase } from '@/config';
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DatabaseService } from './database.service';
 
+@Global()
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -18,5 +20,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       },
     }),
   ],
+  providers: [DatabaseService],
+  exports: [DatabaseService],
 })
 export class DatabaseModule {}

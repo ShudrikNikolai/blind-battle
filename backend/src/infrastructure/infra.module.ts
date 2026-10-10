@@ -5,6 +5,7 @@ import { ChModule } from './cache/cache.module';
 import { EventModule } from './event/event.module';
 import { BullMQModule } from './bullmq/bullmq.module';
 import { CustomTelegrafModule } from './telegraf/telegraf.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 const infra = [
   DatabaseModule,
@@ -12,6 +13,7 @@ const infra = [
   EventModule,
   BullMQModule,
   CustomTelegrafModule,
+  SchedulerModule,
 ];
 
 @Module({
