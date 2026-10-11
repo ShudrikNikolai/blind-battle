@@ -17,10 +17,18 @@ export interface QuizForGame {
   snapshot: QuizSnapshot;
 }
 
+export interface QuizSummary {
+  id: string;
+  title: string;
+  isPublished: boolean;
+}
+
 export interface IQuizPort {
   findPublishedById(id: string): Promise<QuizForGame | null>;
   getRandomPublished(): Promise<QuizForGame | null>;
+  findById(id: string): Promise<QuizForGame | null>;
   listQuizzes(cursor: string, limit: number): Promise<QuizSnapshot[] | null>;
+  listForTest(limit: number): Promise<QuizSummary[]>;
 }
 
 export const QUIZ_PORT = Symbol('QUIZ_PORT');

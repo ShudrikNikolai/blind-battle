@@ -1,34 +1,18 @@
-FROM node:22-alpine AS base
+ARG NODE_VERSION=24
 
+FROM node:${NODE_VERSION}-alpine AS build
 WORKDIR /app
-
-RUN corepack enable
-
-#-----
-FROM base AS deps
-
-COPY package.json yarn.lock ./
-
-RUN yarn install --frozen-lockfile
-
-#-----
-FROM base AS builder
-
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
+RUN npm run build && npm prune --omit=dev
 
-RUN yarn build
-
-FROM node:22-alpine AS runner
-
-WORKDIR /app
-
+FROM node:${NODE_VERSION}-alpine AS runtime
 ENV NODE_ENV=production
-
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-
+WORKDIR /app
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node package.json ./
+USER node
 EXPOSE 3000
-
 CMD ["node", "dist/main.js"]

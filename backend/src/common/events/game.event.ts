@@ -1,5 +1,15 @@
 export const GAME_STARTED_EVENT = 'game.started';
 export const GAME_FINISHED_EVENT = 'game.finished';
+export const GAME_SOLO_FINISHED_EVENT = 'game.solo_finished';
+
+export interface GameSoloFinishedEvent {
+  gameId: string;
+  userId: string;
+  score: number;
+  total: number;
+  answered: number; // сколько вопросов успел пройти
+  correct: boolean[]; // по каждому вопросу, без ответа = false
+}
 
 export interface GameStartedEvent {
   gameId: string;

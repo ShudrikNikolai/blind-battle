@@ -39,9 +39,9 @@ export const setupSwagger = (
     fs.writeFileSync('./swagger-spec.json', JSON.stringify(document));
   }
 
-  SwaggerModule.setup('docs', app, document, {
+  SwaggerModule.setup('api/docs', app, document, {
     customSiteTitle: 'Blind Battle API',
-    jsonDocumentUrl: 'docs/json',
+    jsonDocumentUrl: 'api/docs/json',
     swaggerOptions: {
       persistAuthorization: true,
       withCredentials: true,

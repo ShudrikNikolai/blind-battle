@@ -1,27 +1,18 @@
-FROM node:22-alpine AS deps
+ARG NODE_VERSION=24
+
+FROM node:${NODE_VERSION}-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-
-FROM deps AS build
-COPY . .
-RUN npm run build
-
-FROM node:22-alpine AS prod-deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
-
-FROM node:22-alpine AS runtime
-WORKDIR /app
-ENV NODE_ENV=production \
-    HOST=0.0.0.0 \
-    PORT=3000
-
 COPY package.json ./
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=build /app/build ./build
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY . .
+RUN npm run build && npm prune --omit=dev
 
+FROM node:${NODE_VERSION}-alpine AS runtime
+ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0
+WORKDIR /app
+COPY --from=build --chown=node:node /app/build ./build
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node package.json ./
 USER node
 EXPOSE 3000
 CMD ["node", "build"]

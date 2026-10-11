@@ -54,8 +54,8 @@ export type TCache = ReturnType<typeof configInit>['CACHE'];
 export type TBullMQ = ReturnType<typeof configInit>['BULLMQ'];
 export type TSwagger = ReturnType<typeof configInit>['SWAGGER'];
 
-const parsedAdminIds = (arrIds: string): number[] => {
-  return arrIds.split('_').map((id) => Number(id));
+const parsedAdminIds = (arrIds: string): string[] => {
+  return arrIds.split('_').map((id) => id);
 };
 
 type EnvType = 'string' | 'number' | 'boolean';

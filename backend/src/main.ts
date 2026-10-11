@@ -27,6 +27,8 @@ async function bootstrap() {
     // credentials: appConf
   });
 
+  app.enableShutdownHooks();
+
   app.use(session(authConf));
   app.useGlobalPipes(
     new ValidationPipe({

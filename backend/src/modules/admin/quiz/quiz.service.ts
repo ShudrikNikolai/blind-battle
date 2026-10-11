@@ -11,7 +11,7 @@ import {
   QuizDto,
   UpdateQuizDto,
 } from '../dtos/quiz.dto';
-import type { QuizForGame } from '../ports/quiz.port';
+import type { QuizForGame, QuizSummary } from '../ports/quiz.port';
 
 @Injectable()
 export class QuizService {
@@ -85,5 +85,25 @@ export class QuizService {
         );
       }
     });
+  }
+
+  async findAnyForGame(id: string): Promise<QuizForGame | null> {
+    const quiz = await this.repository.findById(id);
+    return quiz
+      ? { id: quiz.id, title: quiz.title, snapshot: quiz.content }
+      : null;
+  }
+
+  async listSummaries(limit: number): Promise<QuizSummary[]> {
+    const { data } = await this.repository.findPaginated({
+      page: 1,
+      limit,
+      select: ['id', 'title', 'isPublished'],
+    });
+    return data.map((q) => ({
+      id: q.id,
+      title: q.title,
+      isPublished: q.isPublished,
+    }));
   }
 }
