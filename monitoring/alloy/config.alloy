@@ -1,0 +1,58 @@
+logging {
+  level = "warn"
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+}
+
+discovery.relabel "app" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "blind-battle"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "app" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.app.output
+  labels     = { env = sys.env("DEPLOY_ENV") }
+  forward_to = [loki.process.app.receiver]
+}
+
+loki.process "app" {
+  forward_to = [loki.write.loki.receiver]
+
+  stage.match {
+    selector = "{service=\"backend\"}"
+
+    stage.json {
+      expressions = { level = "level" }
+    }
+
+    stage.labels {
+      values = { level = "" }
+    }
+  }
+}
+
+loki.write "loki" {
+  endpoint {
+    url = sys.env("LOKI_PUSH_URL")
+  }
+}

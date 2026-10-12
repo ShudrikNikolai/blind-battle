@@ -1,0 +1,11 @@
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: telegram
+    receivers:
+      - uid: telegram-alerts
+        type: telegram
+        settings:
+          bottoken: "${ALERT_TELEGRAM_BOT_TOKEN}"
+          chatid: "${ALERT_TELEGRAM_CHAT_ID}"
+        disableResolveMessage: false

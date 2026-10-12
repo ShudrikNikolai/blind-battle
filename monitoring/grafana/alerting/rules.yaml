@@ -1,0 +1,202 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: blind-battle
+    folder: Blind Battle
+    interval: 1m
+    rules:
+      # 1. ошибки backend
+      - uid: bb-backend-errors
+        title: Ошибки в логах backend
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: Больше 5 ошибок в логах backend за 5 минут
+          description: Смотри Explore, запрос {service="backend", level="error"}
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum(count_over_time({service="backend", level="error"} [5m]))'
+              queryType: instant
+              editorMode: code
+              datasource: { type: loki, uid: loki }
+          # общий блок «последнее значение», дальше подключается ссылкой *reduce
+          - &reduce
+            refId: B
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: { mode: dropNN }
+              datasource: { type: __expr__, uid: __expr__ }
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { type: last, params: [] }
+                  type: query
+
+      # 2. 5xx на входе
+      - uid: bb-angie-5xx
+        title: Всплеск 5xx на входе
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: Больше 5 ответов 5xx за 5 минут
+          description: Смотри {service="angie"} | json | status >= 500
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum(count_over_time({service="angie"} | json | status >= 500 [5m]))'
+              queryType: instant
+              editorMode: code
+              datasource: { type: loki, uid: loki }
+          - *reduce
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { type: last, params: [] }
+                  type: query
+
+      # 3. backend или frontend недоступен
+      - uid: bb-upstream-down
+        title: Upstream недоступен
+        condition: C
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: Angie не может достучаться до backend или frontend
+          description: Проверь task ps и task logs -- backend
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum(count_over_time({service="angie"} |~ "connect\\(\\) failed|no live upstreams|upstream timed out|host not found in upstream" [2m]))'
+              queryType: instant
+              editorMode: code
+              datasource: { type: loki, uid: loki }
+          - *reduce
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { type: last, params: [] }
+                  type: query
+
+      # 4. сбои игровой логики (сообщения из GameScheduler / GameService / GameListener)
+      - uid: bb-game-failures
+        title: Сбои завершения игр
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: Подметальщик, таймер или события игры падают с ошибкой
+          description: Игры могут зависать в статусе active, результаты не уходят игрокам
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum(count_over_time({service="backend"} |~ "sweep failed|scheduleFinish failed|onStarted failed|onFinished failed" [10m]))'
+              queryType: instant
+              editorMode: code
+              datasource: { type: loki, uid: loki }
+          - *reduce
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { type: last, params: [] }
+                  type: query
+
+      # 5. backend в цикле перезапусков
+      - uid: bb-backend-restarts
+        title: Backend перезапускается
+        condition: C
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: Backend стартовал больше 2 раз за 10 минут
+          description: Вероятно, падает на старте или упирается в память
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: loki
+            model:
+              refId: A
+              expr: 'sum(count_over_time({service="backend"} |= "Starting Nest application" [10m]))'
+              queryType: instant
+              editorMode: code
+              datasource: { type: loki, uid: loki }
+          - *reduce
+          - refId: C
+            relativeTimeRange: { from: 0, to: 0 }
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              datasource: { type: __expr__, uid: __expr__ }
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+                  operator: { type: and }
+                  query: { params: [B] }
+                  reducer: { type: last, params: [] }
+                  type: query
