@@ -9,8 +9,8 @@ export const load: PageServerLoad = async (event) => {
   const res = await orError(
     createApi(event).get<IPaginatedResponse<Quiz>>(`/quiz/all?page=${page}&limit=${LIMIT}`)
   );
-  console.log('res >>>', res)
-  return { quizzes: res.data.data, meta: res.data.meta };
+
+  return { quizzes: res.data, meta: res.meta };
 };
 
 export const actions: Actions = {

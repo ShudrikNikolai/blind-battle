@@ -26,7 +26,7 @@ async function bootstrap() {
   });
   app.enableCors({
     origin: appConf.allowedOrigin,
-    credentials: true
+    credentials: true,
   });
 
   app.set('trust proxy', 1);
@@ -46,5 +46,5 @@ async function bootstrap() {
 
   await app.listen(appConf.port);
 }
-//todo
+
 bootstrap();

@@ -5,6 +5,8 @@ import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 
+const origin = process.env.PUBLIC_ORIGIN ?? 'http://localhost:8080';
+
 export default defineConfig({
 	plugins: [
 		enhancedImages(),
@@ -15,7 +17,8 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+      adapter: adapter(),
+			...(origin ? { paths: { origin } } : {})
 		})
 	],
 	test: {

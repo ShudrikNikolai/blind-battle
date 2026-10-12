@@ -1,17 +1,26 @@
 ARG NODE_VERSION=24
 
-FROM node:${NODE_VERSION}-alpine AS build
+FROM node:${NODE_VERSION}-alpine AS deps
 WORKDIR /app
-COPY package.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+COPY package.json yarn.lock ./
+RUN --mount=type=cache,id=yarn-frontend,target=/usr/local/share/.cache/yarn,sharing=locked \
+    yarn install --frozen-lockfile
+
+FROM deps AS build
 COPY . .
-RUN npm run build && npm prune --omit=dev
+RUN yarn build
+
+FROM node:${NODE_VERSION}-alpine AS prod-deps
+WORKDIR /app
+COPY package.json yarn.lock ./
+RUN --mount=type=cache,id=yarn-frontend,target=/usr/local/share/.cache/yarn,sharing=locked \
+    yarn install --frozen-lockfile --production --ignore-scripts
 
 FROM node:${NODE_VERSION}-alpine AS runtime
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0
 WORKDIR /app
+COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/build ./build
-COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json ./
 USER node
 EXPOSE 3000

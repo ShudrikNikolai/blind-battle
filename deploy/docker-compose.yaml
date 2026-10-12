@@ -1,0 +1,130 @@
+name: blind-battle
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  angie:
+    image: docker.angie.software/angie:${ANGIE_TAG:-1.11.2-alpine}
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ../angie/angie.conf:/etc/angie/angie.conf:ro
+      - ../angie/snippets:/etc/angie/snippets:ro
+      - ../angie/sites/${ANGIE_SITE:-dev}:/etc/angie/sites:ro
+      - angie_acme:/var/lib/angie/acme
+    depends_on:
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *logging
+
+  backend:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    env_file:
+      - ./env/.env.backend
+    environment:
+      APP_PORT: "3000"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      BULLMQ_HOST: redis
+      BULLMQ_PORT: "6379"
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_DATABASE: ${POSTGRES_DB}
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [edge, data]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000${BACKEND_HEALTH_PATH:-/api/v1/health}').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  frontend:
+    build:
+      context: ../frontend
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ./env/.env.frontend
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOST: 0.0.0.0
+      API_URL: http://backend:3000
+      API_PREFIX: /api/v1
+      SESSION_COOKIE_NAME: connect.sid
+    expose:
+      - "3000"
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging: *logging
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - ./env/.env.postgres
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./scripts:/docker-entrypoint-initdb.d:ro
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis_data:/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+networks:
+  edge: {}
+  data:
+    internal: true
+
+volumes:
+  pg_data:
+  redis_data:
+  angie_acme:

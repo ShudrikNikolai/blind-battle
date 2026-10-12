@@ -1,114 +1,230 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Blind Battle (Quizzle)
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Telegram-бот для асинхронных квиз-дуэлей 1 на 1. Оба игрока отвечают на одни и те же вопросы, пока не истечёт общий таймер, но **не видят ответов друг друга до конца игры**. Соперникам не нужно быть онлайн одновременно: игра стартует, когда второй игрок открывает ссылку-приглашение.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Для авторов квизов есть админ-API (сессии, CRUD квизов, публикация) и режим **тестовой игры в одиночку** прямо в боте.
 
-## Description
+## Содержание
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- [Как играть](#как-играть)
+- [Стек](#стек)
+- [Архитектура](#архитектура)
+- [Надёжность игры](#надёжность-игры)
+- [База данных](#база-данных)
+- [Быстрый старт](#быстрый-старт)
+- [Конфигурация](#конфигурация)
+- [Админ-API](#админ-api)
+- [Тесты](#тесты)
+- [Статус и планы](#статус-и-планы)
 
-## Project setup
+## Как играть
 
-```bash
-$ yarn install
+| Команда | Что делает |
+|---|---|
+| `/start` | Регистрация. Нужно один раз подтвердить свой номер телефона (кнопка «Поделиться номером») |
+| `/duel` | Создаёт дуэль и выдаёт ссылку `t.me/<bot>?start=<token>` для соперника |
+| `/start <token>` | Соперник принимает вызов, запускается общий таймер, оба получают первый вопрос |
+| `/test` | Только для админов: тестовая игра в одиночку по любому квизу, в том числе неопубликованному |
+
+Правила:
+
+- Квиз выбирается случайно среди опубликованных; на весь квиз один таймер (`timeLimitSec`).
+- В каждом вопросе ровно один верный ответ. Очки = число верных ответов; вопросы без ответа считаются неверными.
+- Кто закончил раньше, ждёт соперника или конца таймера. Затем обоим приходит результат (победа, поражение, ничья).
+- Тестовая игра админа не попадает в статистику и в рейтинг: у неё отдельное событие `game.solo_finished`.
+
+## Стек
+
+- **NestJS** (модульный монолит), TypeScript
+- **PostgreSQL** + **TypeORM** (схема задаётся SQL-скриптами, `synchronize: false`)
+- **Redis** + **BullMQ**: отложенная задача завершения игры по таймеру
+- **nestjs-telegraf** (Telegraf): бот
+- **express-session** + **argon2**: сессии и пароли админов
+- **class-validator / class-transformer**, **@nestjs/swagger**
+- **@nestjs/event-emitter**: события между модулями
+- **Vitest** (+ SWC): юнит-тесты
+
+Svelte-админка в планах, сейчас есть только админ-API.
+
+## Архитектура
+
+```
+backend/src/
+  common/              декораторы, фильтры, интерсепторы, TypeOrmRepository, события (common/events)
+  config/
+  infrastructure/      database, bullmq, cache, event (EventService), telegraf
+  modules/
+    admin/             админ-API: auth, admins, quiz (владелец квизов), facades, controllers
+    game/              домен игры: entity, repository, service, logic, processor (BullMQ), scheduler
+    user/              пользователи Telegram
+    rating/            статистика
+    notification/      уведомления (в разработке)
+    telegram/          только транспорт: updates, listeners, keyboards, utils
+    health/
 ```
 
-## Compile and run the project
+### Жизненный цикл игры
 
-```bash
-# development
-$ yarn run start
-
-# watch mode
-$ yarn run start:dev
-
-# production mode
-$ yarn run start:prod
+```mermaid
+stateDiagram-v2
+    [*] --> created: /duel (versus)
+    created --> active: соперник открыл ссылку\n(ставится deadline_at)
+    [*] --> active: /test (solo)
+    active --> finished: все ответили\nили вышло время
+    finished --> [*]
 ```
 
-## Run tests
+## Надёжность игры
+
+Источник истины по времени это колонка `deadline_at`, а не очередь. Все критичные операции атомарные:
+
+- **Вход соперника**: один `UPDATE ... WHERE status='created' AND rival_id IS NULL AND author_id <> :user`. Нельзя занять чужую игру или сыграть с собой.
+- **Приём ответа**: один `UPDATE` с `array_append` и условиями `status='active' AND deadline_at > now() AND cardinality(answers) = :questionIndex`. Двойной тап, повтор callback и ответ после дедлайна просто не проходят.
+- **Завершение** идемпотентно: транзакция с `SELECT ... FOR UPDATE`, повторный вызов ничего не делает. Его вызывают три источника: последний ответ, отложенная задача BullMQ (`jobId = finish-<gameId>`) и cron-подметальщик (раз в минуту, страховка на случай падения Redis или рестарта).
+- **События** отправляются после коммита.
+
+## База данных
+
+Схема создаётся SQL-скриптами из `docker-entrypoint-initdb.d` при первом старте контейнера Postgres:
+
+| Скрипт | Содержимое |
+|---|---|
+| `01-init.sql` | Таблицы, enum-типы, индексы, триггер `updated_at` |
+| `02-base-data.sql` | Дефолтный админ `admin` (пароль в комментарии скрипта). **Сменить сразу**, не использовать вне dev |
+| `03-quiz-data.sql` | Два демо-квиза (TypeScript, Postgres) |
+| `04-solo-and-cleanup.sql` | Режим `solo`, `is_sent`, CHECK-ограничения, индексы. Идемпотентный |
+
+Таблицы: `admins`, `users`, `quizzes`, `games`, `notifications`, `statistic_users`, `statistic_games`.
+
+Важно: скрипты из `initdb.d` выполняются только на **пустом томе**. На существующей базе новые скрипты применяются вручную:
 
 ```bash
-# unit tests
-$ yarn run test
-
-# e2e tests
-$ yarn run test:e2e
-
-# test coverage
-$ yarn run test:cov
+docker compose exec -T postgres psql -U <user> -d <db> < 04-solo-and-cleanup.sql
 ```
 
-## Deployment
+Сущности подключаются по маске `**/*.entity.{ts,js}` в конфиге подключения.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Быстрый старт
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Требования: Node.js, Docker (Postgres и Redis).
 
 ```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
+# 1. зависимости
+cd backend
+npm install
+
+# 2. Postgres и Redis (compose в корне репозитория; схема создастся скриптами initdb.d)
+docker compose up -d
+
+# 3. переменные окружения
+cp .env.example .env     # заполнить, см. ниже
+
+# 4. запуск
+npm run start:dev
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+После старта:
 
-## Observability
+- Swagger: `http://localhost:<порт>/api/docs` (JSON: `api/docs/json`), включён только вне production
+- Бот работает через long polling: напиши ему `/start`
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+## Конфигурация
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+Пример `.env` (имена сверь с `src/config`):
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+```env
+# приложение
+PORT=3000
+NODE_ENV=development
+SESSION_SECRET=change-me
 
-## Resources
+# Postgres
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
 
-Check out a few resources that may come in handy when working with NestJS:
+# Redis (BullMQ)
+BULLMQ_HOST=localhost
+BULLMQ_PORT=6379
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observer](https://observer.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+# Telegram
+TELEGRAM_TOKEN=
 
-## Support
+# Telegram ID админов через _: им доступна команда /test
+ADMINS_IDS=123456789_98765454321
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Админ должен хотя бы раз написать боту `/start`, чтобы `/test` заработал. Свой Telegram ID можно узнать у любого бота-«userinfo».
 
-## Stay in touch
+## Админ-API
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+Авторизация по сессионной cookie: сначала `POST /admin/login`, дальше браузер отправляет cookie сам. 
+Все ответы приходят в конверте `{ status, data, timestamp, query }`, 
+ошибки в виде `{ status, errors: { message, details }, timestamp, path }`.
 
-## License
+| Метод | Путь | Описание |
+|---|---|---|
+| `POST` | `/admin/login` | Вход (публичный) |
+| `POST` | `/admin/logout` | Выход |
+| `GET` | `/admin/me` | Текущий админ |
+| `PATCH` | `/admin/upd-pass` | Смена пароля |
+| `POST` | `/admin/new-admin` | Создать админа |
+| `POST` | `/quiz` | Создать квиз (создаётся неопубликованным) |
+| `GET` | `/quiz/all?page=&limit=` | Список с пагинацией |
+| `GET` | `/quiz/:id` | Квиз по ID |
+| `PATCH` | `/quiz/:id` | Изменить title и/или content |
+| `PATCH` | `/quiz/:id/publish` | Опубликовать или скрыть |
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Формат квиза:
+
+```json
+{
+  "title": "Postgres для разработчика",
+  "content": {
+    "timeLimitSec": 90,
+    "questions": [
+      {
+        "question": "Какой тип хранит JSON в бинарном виде?",
+        "buttons": [
+          { "text": "json", "isCorrectAnswer": false },
+          { "text": "jsonb", "isCorrectAnswer": true }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Ограничения: 1–30 вопросов, 2–4 кнопки, `timeLimitSec` от 10 до 3600, в каждом вопросе ровно один верный ответ.
+
+## Тесты
+
+```bash
+npx vitest run                  # все тесты
+npx vitest run src/modules/game # один модуль
+```
+
+Сейчас это юнит-тесты без БД: 
+сервисы `admin` и `quiz`, чистая логика `game` (подсчёт, победитель, готовность), рендер и разбор данных в `telegram`. 
+
+Тесты лежат рядом с модулями: `modules/<module>/tests/*.spec.ts`.
+
+## Статус и планы
+
+Готово: админ-API с Swagger, дуэли, тестовый solo-режим, таймеры и подметальщик, бот.
+
+В планах:
+
+- Слушатель `rating`: обновление `statistic_users` и `statistic_games` по `game.finished` (`INSERT ... ON CONFLICT`), затем ELO и лидерборд
+- Воркеры уведомлений и напоминания сопернику («buddy system»)
+- Svelte-админка (редактор вопросов, аналитика сложности)
+- Интеграционные тесты на реальном Postgres (двойной тап, ответ после дедлайна, гонка завершения)
+
+Известные ограничения MVP:
+
+- Токен приглашения теряется, если игрок открыл ссылку до подтверждения номера: после подтверждения нужно открыть ссылку ещё раз
+- Событие `game.finished` уходит после коммита; при падении процесса ровно между ними статистика игры не обновится (решение: outbox)
+- Ничья при равном счёте не разрешается по скорости ответов: время ответов не хранится
+- Игры в статусе `created`, к которым никто не присоединился, не удаляются
