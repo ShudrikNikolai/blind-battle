@@ -71,38 +71,6 @@ flowchart LR
 - **Docker Compose** + **Task**: запуск и операции
 - **Vitest** (+ SWC): юнит-тесты
 
-### Модули backend
-
-```
-backend/src/
-  common/            декораторы, фильтры, интерсепторы, TypeOrmRepository, события (common/events)
-  config/
-  infrastructure/    database, bullmq, cache, event (EventService), telegraf
-  modules/
-    admin/           админ-API: auth, admins, quiz (владелец квизов), facades, controllers
-    game/            домен игры: entity, repository, service, logic, processor (BullMQ), scheduler
-    user/            пользователи Telegram
-    rating/          статистика (в разработке)
-    notification/    уведомления (в разработке)
-    telegram/        только транспорт: updates, listeners, keyboards, utils
-    health/
-```
-
-Основные принципы:
-
-- **`game` не знает про `admin`.** Квизы он получает через порт `IQuizPort` (токен `QUIZ_PORT`). Реализация (`QuizFacade`) живёт в `admin` и сейчас ходит в БД напрямую. При выносе админки в отдельный сервис её заменит HTTP/gRPC-клиент того же порта, а `game` не изменится.
-- **Снапшот вопросов.** При старте игры квиз копируется в `games.quiz` (jsonb), поэтому правка или скрытие квиза не ломает идущие игры.
-- **DTO на границах модулей.** Внутри модуля работают сущности, наружу уходят DTO (`entity.getPublic()`). Флаги правильных ответов никогда не покидают `game`.
-- **События** типизированы в `common/events` (`EventMap`) и отправляются через `EventService`:
-
-  | Событие | Кто слушает |
-  |---|---|
-  | `game.started` | `telegram`: автору уходит первый вопрос |
-  | `game.finished` | `telegram`: результат обоим; `rating`: статистика (в разработке) |
-  | `game.solo_finished` | `telegram`: результат тестовой игры |
-
-- **`telegram` не содержит игровой логики**: хендлеры зовут `GameService` и `UserService`, а ошибки доменных сервисов превращаются в понятные сообщения фильтром `TelegramExceptionFilter`.
-
 ### Жизненный цикл игры
 
 ```mermaid
