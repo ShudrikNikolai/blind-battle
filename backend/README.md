@@ -130,33 +130,25 @@ npm run start:dev
 
 ## Конфигурация
 
-Пример `.env` (имена сверь с `src/config`):
+### `deploy/env/.env.backend`
 
-```env
-# приложение
-PORT=3000
-NODE_ENV=development
-SESSION_SECRET=change-me
-
-# Postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=
-DB_PASSWORD=
-DB_NAME=
-
-# Redis (BullMQ)
-BULLMQ_HOST=localhost
-BULLMQ_PORT=6379
-
-# Telegram
-TELEGRAM_TOKEN=
-
-# Telegram ID админов через _: им доступна команда /test
-ADMINS_IDS=123456789_98765454321
-```
-
-Админ должен хотя бы раз написать боту `/start`, чтобы `/test` заработал. Свой Telegram ID можно узнать у любого бота-«userinfo».
+| Переменная | Пример | Описание |
+|---|---|---|
+| `NODE_ENV` | `production` | Должно совпадать с тем, что принимает `src/config` |
+| `TZ` | `Europe/Moscow` | Регистр важен на Linux |
+| `ALLOWED_ORIGIN`, `CREDENTIALS` | `http://localhost:8080`, `true` | CORS; за Angie всё same-origin |
+| `SECRET`, `MAX_AGE` | `change-me…`, `36000` | Сессии (`openssl rand -hex 32`) |
+| `APP_NAME`, `APP_PORT`, `APP_LOCALE` | `blind-battle`, `3000`, `ru` | В Docker порт фиксирован: `3000` |
+| `APP_BASE_URL` | `http://localhost:8080` | Публичный адрес; `https://` включает secure-cookie |
+| `APP_GLOBAL_PREFIX` | `api` | Префикс маршрутов |
+| `APP_GLOBAL_DEFAULT_API_VERSION` | `1` | Версия по умолчанию, маршруты вида `/api/v1/...` |
+| `SWAGGER_ENABLE`, `SWAGGER_CREATE_FILE` | `true`, `false` | В проде `SWAGGER_ENABLE=false` |
+| `SWAGGER_PATH` | `api/swagger` | Должен быть под `/api`, иначе Angie отправит путь во frontend |
+| `DB_TYPE`, `DB_SYNCHRONIZE` | `postgres`, `false` | Схема только через SQL-скрипты |
+| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE` | `localhost`, `5432`, … | В Docker хост и порт задаёт compose, креды берутся из `.env.postgres` |
+| `BULLMQ_HOST`, `BULLMQ_PORT` | `localhost`, `6379` | В Docker переопределяются на `redis:6379` |
+| `TOKEN` | `123456789:AA…` | Токен игрового бота от @BotFather |
+| `ADMINS_IDS` | `111111111,222222222` | Telegram ID админов (команда `/test`) |
 
 ## Админ-API
 
@@ -210,21 +202,3 @@ npx vitest run src/modules/game # один модуль
 сервисы `admin` и `quiz`, чистая логика `game` (подсчёт, победитель, готовность), рендер и разбор данных в `telegram`. 
 
 Тесты лежат рядом с модулями: `modules/<module>/tests/*.spec.ts`.
-
-## Статус и планы
-
-Готово: админ-API с Swagger, дуэли, тестовый solo-режим, таймеры и подметальщик, бот.
-
-В планах:
-
-- Слушатель `rating`: обновление `statistic_users` и `statistic_games` по `game.finished` (`INSERT ... ON CONFLICT`), затем ELO и лидерборд
-- Воркеры уведомлений и напоминания сопернику («buddy system»)
-- Svelte-админка (редактор вопросов, аналитика сложности)
-- Интеграционные тесты на реальном Postgres (двойной тап, ответ после дедлайна, гонка завершения)
-
-Известные ограничения MVP:
-
-- Токен приглашения теряется, если игрок открыл ссылку до подтверждения номера: после подтверждения нужно открыть ссылку ещё раз
-- Событие `game.finished` уходит после коммита; при падении процесса ровно между ними статистика игры не обновится (решение: outbox)
-- Ничья при равном счёте не разрешается по скорости ответов: время ответов не хранится
-- Игры в статусе `created`, к которым никто не присоединился, не удаляются

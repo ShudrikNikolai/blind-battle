@@ -1,7 +1,7 @@
 {
   "name": "backend",
-  "version": "0.0.1",
-  "description": "",
+  "version": "0.5.0",
+  "description": "mvp",
   "author": "Shudrik N.",
   "license": "MIT",
   "type": "commonjs",

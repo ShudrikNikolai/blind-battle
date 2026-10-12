@@ -2,7 +2,8 @@
 	"name": "frontend",
 	"author": "Shudrik N.",
 	"license": "MIT",
-	"version": "0.0.1",
+	"version": "0.5.0",
+  "description": "mvp",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",

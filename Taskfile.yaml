@@ -1,9 +1,11 @@
 version: '3'
 
 vars:
-  COMPOSE: docker compose -f deploy/docker-compose.yaml # backend + frontend + angie + redis + postgres
-  COMPOSE_DEV: docker compose -f deploy/docker-compose.dev.yaml # redis + postgres
-  COMPOSE_PRDO: docker compose -f deploy/docker-compose.prod.yaml # backend + frontend + angie + redis + postgres + grafana + loki
+  STACK: '{{default "dev" .STACK}}'
+  COMPOSE_FILES: '-f deploy/docker-compose.yaml{{if eq .STACK "dev"}} -f deploy/docker-compose.dev.yaml{{end}}'
+  COMPOSE: docker compose --env-file deploy/env/.env.deploy --env-file deploy/env/.env.postgres {{.COMPOSE_FILES}}
+  MON_COMPOSE: docker compose --env-file deploy/env/.env.monitoring -f deploy/docker-compose.monitoring.yaml
+  COMPOSE_DEVELOPE: docker compose -f deploy/docker-compose.dev.yaml
 
 tasks:
   default:
@@ -11,15 +13,47 @@ tasks:
     cmds:
       - task --list
 
-  up:
-    desc: Собрать и запустить всё (dev, HTTP)
+  env:init:
+    desc: Создать env-файлы из *.example (существующие не трогает)
     cmds:
-      - '{{.COMPOSE}} up -d --build'
+      - cmd: 'for f in deploy/env/.env.*.example; do t="${f%.example}"; [ -e "$t" ] || cp "$f" "$t"; done'
+        platforms: [linux, darwin]
+      - cmd: >-
+          powershell -NoProfile -Command
+          'Get-ChildItem deploy/env/.env.*.example | ForEach-Object { $t = $_.FullName -replace "\.example$",""; if (-not (Test-Path $t)) { Copy-Item $_.FullName $t } }'
+        platforms: [windows]
 
-  up:prod:
-    desc: Собрать и запустить в режиме prod (HTTPS, ACME)
-    env:
-      ANGIE_SITE: prod
+  dev:
+    desc: 'Поднять дев окружение посгрю + редис'
+    cmds:
+      - '{{.COMPOSE_DEVELOPE}} down'
+      - '{{.COMPOSE_DEVELOPE}} up -d --build'
+      - '{{.COMPOSE_DEVELOPE}} logs --tail 100'
+
+  up:all:
+    desc: 'Поднять всё: приложение + мониторинг (на сервере: task up:all STACK=prod)'
+    preconditions:
+      - sh: test -f deploy/env/.env.backend && test -f deploy/env/.env.frontend && test -f deploy/env/.env.postgres && test -f deploy/env/.env.deploy && test -f deploy/env/.env.monitoring
+        msg: Нет env-файлов в deploy/env. Выполни task env:init и заполни их
+    cmds:
+      - task: up
+      - task: mon:up
+      - task: ps:all
+
+  down:all:
+    desc: Остановить всё (данные остаются)
+    cmds:
+      - task: mon:down
+      - task: down
+
+  ps:all:
+    desc: Статус приложения и мониторинга
+    cmds:
+      - task: ps
+      - task: mon:ps
+
+  up:
+    desc: 'Собрать и запустить (dev по умолчанию; на сервере: task up STACK=prod)'
     cmds:
       - '{{.COMPOSE}} up -d --build'
 
@@ -55,7 +89,7 @@ tasks:
       - '{{.COMPOSE}} logs -f --tail=100 {{.CLI_ARGS}}'
 
   config:
-    desc: Проверить compose-файл и подстановку переменных
+    desc: Показать итоговый compose с подстановкой переменных
     cmds:
       - '{{.COMPOSE}} config'
 
@@ -76,6 +110,36 @@ tasks:
       - "{{.COMPOSE}} exec postgres sh -c 'psql -U $POSTGRES_USER -d $POSTGRES_DB'"
 
   db:apply:
-    desc: 'Применить SQL-файл: task db:apply -- backend/db/init/04-solo-and-cleanup.sql'
+    desc: 'Применить SQL-файл: task db:apply -- deploy/scripts/04-upd-table.sql'
     cmds:
       - "{{.COMPOSE}} exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB' < {{.CLI_ARGS}}"
+
+  mon:up:
+    desc: Поднять мониторинг (Loki, Alloy, Grafana)
+    cmds:
+      - '{{.MON_COMPOSE}} up -d'
+
+  mon:down:
+    desc: Остановить мониторинг (данные остаются)
+    cmds:
+      - '{{.MON_COMPOSE}} down'
+
+  mon:ps:
+    desc: Статус мониторинга
+    cmds:
+      - '{{.MON_COMPOSE}} ps'
+
+  mon:logs:
+    desc: 'Логи мониторинга: task mon:logs -- alloy'
+    cmds:
+      - '{{.MON_COMPOSE}} logs -f --tail=100 {{.CLI_ARGS}}'
+
+  mon:restart:
+    desc: 'Перезапустить сервис мониторинга: task mon:restart -- grafana'
+    cmds:
+      - '{{.MON_COMPOSE}} restart {{.CLI_ARGS}}'
+
+  mon:verify:
+    desc: Проверить конфиг Loki (-verify-config)
+    cmds:
+      - '{{.MON_COMPOSE}} run --rm --no-deps loki -config.file=/etc/loki/loki-config.yaml -verify-config'
