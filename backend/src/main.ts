@@ -1,15 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ConsoleLogger, ValidationPipe, VersioningType } from '@nestjs/common';
 import session from 'express-session';
 import { ConfigService } from '@nestjs/config';
 import type { TApp, TAuth } from './config';
 import { setupSwagger } from './common';
 import { HttpExceptionFilter } from './common/filters';
+import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
+  const isProd = process.env.NODE_ENV === 'production';
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: new ConsoleLogger({ json: isProd, colors: !isProd }),
   });
 
   const appConfSrv = app.get(ConfigService);
@@ -24,8 +26,10 @@ async function bootstrap() {
   });
   app.enableCors({
     origin: appConf.allowedOrigin,
-    // credentials: appConf
+    credentials: true
   });
+
+  app.set('trust proxy', 1);
 
   app.enableShutdownHooks();
 
