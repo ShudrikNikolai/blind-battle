@@ -151,28 +151,13 @@ task ps:all        # статус всех сервисов
 | `task db:apply -- deploy/scripts/04-upd-table.sql` | Применить SQL-файл |
 | `task mon:up` / `mon:down` / `mon:ps` / `mon:logs` / `mon:restart` | Управление мониторингом |
 
-## Прод и HTTPS
-
-В Angie маршрутизация такая: `/api/*` идёт в backend, всё остальное во frontend, `/healthz` отвечает сам прокси. На уровне Angie включены: JSON access-лог, лимиты запросов (логин и API), заголовки безопасности, динамический DNS upstream'ов (`resolve`), сжатие. Сертификаты Let's Encrypt выпускает встроенный ACME-клиент.
-
-1. Направь A-запись домена на сервер, открой порты 80 и 443.
-2. В `deploy/env/.env.deploy`: `ANGIE_SITE=prod`, `HTTP_PORT=80`.
-3. В `.env.backend` и `.env.frontend`: публичный адрес `https://example.com` (`APP_BASE_URL`, `ALLOWED_ORIGIN`, `ORIGIN`), сильный `SECRET`, `SWAGGER_ENABLE=false`.
-4. В `angie/sites/prod/site.conf` замени `example.com` на свой домен. Первый запуск сделай на staging-сервере Let's Encrypt (строка закомментирована в файле), убедись по `task logs -- angie`, что сертификат выдаётся, затем переключись на боевой и перезапусти Angie.
-5. `task up:all STACK=prod`.
-
-Важно:
-
-- Бот работает через long polling, поэтому у `backend` должна быть **ровно одна реплика**, иначе Telegram вернёт конфликт `getUpdates`.
-- Postgres и Redis находятся во внутренней сети и снаружи недоступны. Grafana слушает только `127.0.0.1`: на сервере открывай через SSH-туннель `ssh -L 3001:127.0.0.1:3001 user@server`.
-- Сменять пароль админа и секреты нужно до первого публичного запуска.
-
 ## Мониторинг и алерты
 
 Отдельный compose-проект `blind-battle-monitoring` с лимитами CPU и памяти. Перезапуск мониторинга приложение не затрагивает.
 
-- **Alloy** читает логи контейнеров приложения через Docker API и отправляет в Loki. Лейблы: `service`, `container`, `env`, у backend ещё `level`. Backend пишет JSON-логи, Angie отдаёт JSON access-лог.
-- **Loki** хранит логи 14 дней, наружу не публикуется.
+- **Alloy** читает логи контейнеров приложения через Docker API и отправляет в Loki. Лейблы: `service`, `container`, `env`, у backend ещё `level`.
+  Backend пишет JSON-логи, Angie отдаёт JSON access-лог.
+- **Loki** хранит логи 14 дней.
 - **Grafana** показывает логи (Explore) и шлёт алерты в Telegram через отдельного бота.
 
 Алерты (папка «Blind Battle» в Grafana):
@@ -187,17 +172,14 @@ task ps:all        # статус всех сервисов
 
 Проверка: Grafana, Alerting, Contact points, `telegram`, Test. Если Grafana лежит вместе с сервером, алертов не будет, поэтому добавь внешнюю проверку `/healthz` (UptimeRobot или аналог).
 
-Alloy читает Docker-сокет только на чтение, но для прода лучше поставить `docker-socket-proxy`. В логах Angie есть IP клиентов, учитывай это при настройке срока хранения.
-
 ## Статус и планы
 
 Готово: админ-API с Swagger, дуэли, тестовый solo-режим для админов, таймеры и подметальщик, Telegram-бот, реверс-прокси Angie с HTTPS, мониторинг с алертами, Task-команды для запуска.
 
 В планах:
 
-- Слушатель `rating`: обновление `statistic_users` и `statistic_games` по `game.finished` (`INSERT ... ON CONFLICT`), затем ELO и лидерборд
 - Воркеры уведомлений и напоминания сопернику («buddy system»)
-- Svelte-админка (редактор вопросов, аналитика сложности)
+- Svelte-админка (аналитика)
 - Интеграционные тесты на реальном Postgres: двойной тап, ответ после дедлайна, гонка завершения, solo
 
 Известные ограничения MVP:
