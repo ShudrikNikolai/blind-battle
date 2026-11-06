@@ -12,16 +12,29 @@ export class GameScheduler {
     private readonly game: GameService,
   ) {}
 
-  /** Страховка: игры с прошедшим дедлайном, которые не закрыл таймер (упал Redis, рестарт). */
-  @Cron(CronExpression.EVERY_MINUTE)
-  async sweepExpired(): Promise<void> {
-    const ids = await this.repository.findExpiredActiveIds(100);
+  //истёкшие игры и игры, где все уже ответили, но finish не сработал
+  @Cron(CronExpression.EVERY_MINUTE, { waitForCompletion: true })
+  async sweepFinishable(): Promise<void> {
+    const ids = await this.repository.findFinishableActiveIds(100);
     for (const id of ids) {
       try {
         await this.game.finish(id);
       } catch (e) {
         this.logger.error(`sweep failed ::: ${id} ::: ${e}`);
       }
+    }
+  }
+
+  // очистка дуэлей к которым так и не присоединились
+  @Cron(CronExpression.EVERY_DAY_AT_4AM, { waitForCompletion: true })
+  async cleanupAbandoned(): Promise<void> {
+    try {
+      const deleted = await this.repository.deleteAbandonedCreated();
+      if (deleted > 0) {
+        this.logger.log(`abandoned games deleted ::: ${deleted}`);
+      }
+    } catch (e) {
+      this.logger.error(`cleanupAbandoned failed ::: ${e}`);
     }
   }
 }

@@ -7,16 +7,28 @@ import { ErrorResponseDto } from './error-response.dto';
 import { SESSION_AUTH } from '../utils';
 import { PaginationMetaDto } from './api-envelope.dto';
 
+const normalizeSwaggerPath = (raw: string): string => {
+  const clean = raw.replace(/^\/+|\/+$/g, '');
+  if (!clean) return 'api/docs';
+  return clean.startsWith('api/') ? clean : `api/${clean}`;
+};
+
 export const setupSwagger = (
   app: INestApplication,
   config: ConfigService,
 ): void => {
   const { name, version } = config.getOrThrow<TApp>('APP');
-  const { enable, createFile } = config.getOrThrow<TSwagger>('SWAGGER');
+  const {
+    enable,
+    createFile,
+    path: rawPath,
+  } = config.getOrThrow<TSwagger>('SWAGGER');
 
   if (!enable) {
     return;
   }
+
+  const swaggerPath = normalizeSwaggerPath(rawPath);
 
   const documentBuilder = new DocumentBuilder()
     .setTitle(name)
@@ -39,9 +51,9 @@ export const setupSwagger = (
     fs.writeFileSync('./swagger-spec.json', JSON.stringify(document));
   }
 
-  SwaggerModule.setup('api/docs', app, document, {
+  SwaggerModule.setup(swaggerPath, app, document, {
     customSiteTitle: 'Blind Battle API',
-    jsonDocumentUrl: 'api/docs/json',
+    jsonDocumentUrl: `${swaggerPath}/json`,
     swaggerOptions: {
       persistAuthorization: true,
       withCredentials: true,

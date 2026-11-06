@@ -7,8 +7,8 @@ import {
   ManyToOne,
   type Relation,
 } from 'typeorm';
-import { UserEntity } from '../../user/user.entity';
-import type { QuizSnapshot } from '../../admin/ports/quiz.port';
+import { UserEntity } from '../../user/core/user.entity';
+import type { QuizSnapshot } from '@/common/contracts/quiz';
 import { GameDto } from '../dtos/game.dto';
 
 export type GameStatus = 'created' | 'active' | 'finished';

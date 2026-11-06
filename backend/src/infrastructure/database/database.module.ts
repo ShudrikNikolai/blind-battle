@@ -17,7 +17,6 @@ import { join } from 'node:path';
           synchronize: false,
           autoLoadEntities: true,
           entities: [join(__dirname, '../../**/*.entity.{ts,js}')],
-          migrations: ['dist/infrastructure/database/migrations/*.{js,ts}'],
         };
       },
     }),

@@ -1,5 +1,5 @@
 import { BaseEntity } from '@/common';
-import { UserEntity } from '../../user/user.entity';
+import { UserEntity } from '../../user/core/user.entity';
 import { Column, Entity, JoinColumn, OneToOne, type Relation } from 'typeorm';
 
 @Entity('statistic_users')

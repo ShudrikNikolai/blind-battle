@@ -10,6 +10,10 @@ export type Outcome = 'win' | 'lose' | 'draw';
 export const SOLO_RE = /^s:([0-9a-f-]{36})$/;
 export const soloData = (quizId: string): string => `s:${quizId}`;
 
+// callback_data: t:<tagId>
+export const TOPIC_RE = /^t:([0-9a-f-]{36})$/;
+export const topicData = (tagId: string): string => `t:${tagId}`;
+
 export const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -55,6 +59,29 @@ export const renderResult = (
   return (
     `🏁 <b>Игра окончена</b>\n\nТы: <b>${mine}/${e.total}</b>\n` +
     `${escapeHtml(rivalName)}: <b>${theirs}/${e.total}</b>\n\n${verdict}`
+  );
+};
+
+export interface StatsView {
+  firstName: string;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export const renderStats = (s: StatsView): string => {
+  const total = s.wins + s.losses + s.draws;
+  const head = `📊 <b>Статистика</b>\n\n👤 ${escapeHtml(s.firstName)}\n\n`;
+
+  if (total === 0) {
+    return `${head}Пока нет завершённых игр.\nСоздай дуэль командой /duel.`;
+  }
+
+  return (
+    `${head}🏆 Побед: <b>${s.wins}</b>\n` +
+    `😔 Поражений: <b>${s.losses}</b>\n` +
+    `🤝 Ничьих: <b>${s.draws}</b>\n\n` +
+    `🎮 Всего игр: <b>${total}</b>`
   );
 };
 

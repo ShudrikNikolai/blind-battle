@@ -2,7 +2,7 @@ import { UseFilters } from '@nestjs/common';
 import { Command, Ctx, On, Start, Update } from 'nestjs-telegraf';
 import type { Context } from 'telegraf';
 import type { Message } from 'telegraf/types';
-import { UserService } from '@/modules/user/user.service';
+import { UserService } from '@/modules/user/core/user.service';
 import { GameService } from '@/modules/game/core/game.service';
 import { TelegramService } from '../core/telegram.service';
 import { TEXT } from '../utils/consts/texts';
@@ -36,22 +36,36 @@ export class StartUpdate {
       userName: from.username ?? null,
     });
 
+    const text =
+      ctx.message && 'text' in ctx.message ? ctx.message.text : undefined;
+    const token = startPayload(text);
+
     if (!user.isConfirmed) {
+      // Не теряем приглашение: обработаем его после подтверждения телефона.
+      if (token) {
+        await this.users.setPendingInvite(String(from.id), token);
+      }
       await ctx.reply(TEXT.askContact, { ...contactKeyboard() });
       return;
     }
 
-    const text =
-      ctx.message && 'text' in ctx.message ? ctx.message.text : undefined;
-    const token = startPayload(text);
     if (!token) {
       await ctx.reply(TEXT.welcome, { parse_mode: 'HTML' });
       return;
     }
 
-    // соперник по ссылке: join запускает таймер, автору первый вопрос уйдёт из слушателя события
-    const game = await this.games.join(token, user.id);
-    const question = await this.games.getQuestion(game.id, user.id);
+    await this.joinAndSend(ctx, user.id, token);
+  }
+
+  /** Вступаем в игру по invite-токену и отправляем первый вопрос. */
+  private async joinAndSend(
+    ctx: Context,
+    userId: string,
+    token: string,
+  ): Promise<void> {
+    // join запускает таймер, автору первый вопрос уйдёт из слушателя события
+    const game = await this.games.join(token, userId);
+    const question = await this.games.getQuestion(game.id, userId);
     if (!question) {
       await ctx.reply(TEXT.allAnswered);
       return;
@@ -89,14 +103,35 @@ export class StartUpdate {
       return;
     }
 
-    const user = await this.users.findByTelegramId(String(ctx.from!.id));
+    const telegramId = String(ctx.from!.id);
+    const user = await this.users.findByTelegramId(telegramId);
     if (!user) return void (await ctx.reply(TEXT.needStart));
+
     if (user.isConfirmed) {
+      // На случай гонки: pending-приглашение всё равно можно обработать.
+      const pending = await this.users.takePendingInvite(telegramId);
+      if (pending) {
+        await this.joinAndSend(ctx, user.id, pending);
+        return;
+      }
       await ctx.reply(TEXT.alreadyConfirmed, Markup.removeKeyboard());
       return;
     }
 
-    await this.users.confirm(String(ctx.from!.id), contact.phone_number);
+    const confirmed = await this.users.confirm(
+      telegramId,
+      contact.phone_number,
+    );
+    if (!confirmed) {
+      await ctx.reply(TEXT.alreadyConfirmed, Markup.removeKeyboard());
+      return;
+    }
+
     await ctx.reply(TEXT.confirmed, Markup.removeKeyboard());
+
+    const pending = await this.users.takePendingInvite(telegramId);
+    if (pending) {
+      await this.joinAndSend(ctx, user.id, pending);
+    }
   }
 }

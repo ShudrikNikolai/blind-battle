@@ -1,7 +1,7 @@
 import { UseFilters } from '@nestjs/common';
 import { Action, Ctx, Update } from 'nestjs-telegraf';
 import type { Context } from 'telegraf';
-import { UserService } from '@/modules/user/user.service';
+import { UserService } from '@/modules/user/core/user.service';
 import { GameService } from '@/modules/game/core/game.service';
 import { TelegramService } from '../core/telegram.service';
 import { answerKeyboard } from '../utils/keyboards/keyboards';

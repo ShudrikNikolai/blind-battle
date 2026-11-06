@@ -2,7 +2,7 @@ import { TypeOrmRepository } from '@/common';
 import { Injectable } from '@nestjs/common';
 import { AdminEntity } from './admin.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 
 @Injectable()
 export class AdminRepository extends TypeOrmRepository<AdminEntity> {
@@ -11,6 +11,16 @@ export class AdminRepository extends TypeOrmRepository<AdminEntity> {
     protected readonly repository: Repository<AdminEntity>,
   ) {
     super(repository);
+  }
+
+  findByLogin(login: string): Promise<AdminEntity | null> {
+    return this.findOne({ filter: { login } });
+  }
+
+  countUsable(): Promise<number> {
+    return this.repository.count({
+      where: { login: Not('seed-admin') },
+    });
   }
 
   async createAdmin(login: string, passwordHash: string): Promise<AdminEntity> {

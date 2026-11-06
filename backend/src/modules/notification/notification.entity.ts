@@ -7,7 +7,7 @@ import {
   ManyToOne,
   type Relation,
 } from 'typeorm';
-import { UserEntity } from '../user/user.entity';
+import { UserEntity } from '../user/core/user.entity';
 
 @Entity('notifications')
 @Index(['isSend'])

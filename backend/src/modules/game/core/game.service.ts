@@ -29,6 +29,7 @@ import {
   buildQuestionView,
   correctness,
   decideWinner,
+  everyoneDone,
   isComplete,
   score,
 } from '../domain/game.domain';
@@ -36,7 +37,8 @@ import {
   type IQuizPort,
   QUIZ_PORT,
   QuizSummary,
-} from '../../admin/ports/quiz.port';
+  QuizTagSummary,
+} from '@/common/contracts/quiz';
 import { STATISTIC_UPDATE_EVENT } from '@/common/events/statistic.event';
 
 @Injectable()
@@ -50,9 +52,13 @@ export class GameService {
     @InjectQueue(GAME_QUEUE) private readonly queue: Queue,
   ) {}
 
-  async create(authorId: string): Promise<GameDto> {
-    const quiz = await this.quizPort.getRandomPublished();
-    if (!quiz) throw new NotFoundException('No published quizzes');
+  async create(authorId: string, tagId?: string): Promise<GameDto> {
+    const quiz = await this.quizPort.getRandomPublished(tagId);
+    if (!quiz) {
+      throw new NotFoundException(
+        tagId ? 'No quizzes in this topic' : 'No published quizzes',
+      );
+    }
 
     const game = await this.repository.create({
       inviteToken: randomBytes(9).toString('base64url'), // /start <token>
@@ -68,6 +74,10 @@ export class GameService {
 
   async listTestQuizzes(limit = 10): Promise<QuizSummary[]> {
     return this.quizPort.listForTest(limit);
+  }
+
+  async listTopics(): Promise<QuizTagSummary[]> {
+    return this.quizPort.listPublishedTopics();
   }
 
   async createSolo(userId: string, quizId: string): Promise<GameDto> {
@@ -148,13 +158,8 @@ export class GameService {
     const fresh = (await this.repository.findById(game.id)) ?? game;
     const answers = this.answersOf(fresh, side);
 
-    // не приняли и индекс не сдвинулся. значит, вышло время или игра закончилась
-    let finished = fresh.status === 'finished'; // TODO
-    if (
-      accepted &&
-      isComplete(fresh.quiz, fresh.authorAnswers) &&
-      isComplete(fresh.quiz, fresh.rivalAnswers)
-    ) {
+    let finished = fresh.status === 'finished';
+    if (accepted && isComplete(fresh.quiz, answers)) {
       finished = (await this.finish(game.id)) || finished;
     }
     const next = buildQuestionView(fresh, answers.length);
@@ -166,9 +171,7 @@ export class GameService {
    */
   async finish(gameId: string): Promise<boolean> {
     const game = await this.repository.finishWith(gameId, (g) => {
-      const complete =
-        isComplete(g.quiz, g.authorAnswers) &&
-        isComplete(g.quiz, g.rivalAnswers);
+      const complete = everyoneDone(g);
       const expired = !!g.deadlineAt && g.deadlineAt.getTime() <= Date.now();
       if (!complete && !expired) return null;
 
@@ -209,7 +212,8 @@ export class GameService {
       };
 
       this.events.emit(GAME_FINISHED_EVENT, resEvent);
-      this.events.emit(STATISTIC_UPDATE_EVENT, resEvent);
+      // Ждём запись статистики, чтобы /stats сразу показывал актуальные цифры.
+      await this.events.emitAsync(STATISTIC_UPDATE_EVENT, resEvent);
     }
 
     await this.queue.remove(finishJobId(game.id)).catch(() => undefined); // таймер больше не нужен

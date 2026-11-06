@@ -12,4 +12,19 @@ export class StatisticGameRepository extends TypeOrmRepository<StatisticGameEnti
   ) {
     super(repository);
   }
+
+  // game.finished может прийти повторно дубль по game_id не создаём
+  async saveIfAbsent(data: {
+    gameId: string;
+    authorCorrect: boolean[];
+    rivalCorrect: boolean[];
+  }): Promise<void> {
+    await this.repository
+      .createQueryBuilder()
+      .insert()
+      .into(StatisticGameEntity)
+      .values(data)
+      .orIgnore()
+      .execute();
+  }
 }

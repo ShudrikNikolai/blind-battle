@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { UserStatsDto } from '../dtos/statistic-user.dto';
 import { StatisticUserRepository } from './statistic-user.repository';
 
 interface IStatisticUser {
@@ -11,14 +12,19 @@ interface IStatisticUser {
 export class StatisticUserService {
   constructor(private readonly repository: StatisticUserRepository) {}
 
+  async getStats(userId: string): Promise<UserStatsDto> {
+    const stats = await this.repository.findByUserId(userId);
+    return {
+      wins: stats?.wins ?? 0,
+      losses: stats?.losses ?? 0,
+      draws: stats?.draws ?? 0,
+    };
+  }
+
   async updateStats(data: IStatisticUser): Promise<void> {
     const promises = this.statsUpdateUserInc(data);
     if (!promises) return;
-    try {
-      await Promise.all(promises);
-    } catch (err) {
-      console.log(err)
-    }
+    await Promise.all(promises);
   }
 
   private statsUpdateUserInc(e: IStatisticUser) {

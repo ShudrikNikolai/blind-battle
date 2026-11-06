@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TypeOrmRepository } from '@/common';
 import { GameEntity, GameWinner } from './game.entity';
-import { QuizSnapshot } from '../../admin/ports/quiz.port';
+import { QuizSnapshot } from '@/common/contracts/quiz';
 
 export type Side = 'author' | 'rival';
 
@@ -120,13 +120,38 @@ export class GameRepository extends TypeOrmRepository<GameEntity> {
     });
   }
 
-  async findExpiredActiveIds(limit: number): Promise<string[]> {
+  async findFinishableActiveIds(limit: number): Promise<string[]> {
     const rows = await this.repository
       .createQueryBuilder('g')
       .select('g.id', 'id')
-      .where("g.status = 'active' AND g.deadline_at < now()")
+      .where(
+        `g.status = 'active' AND (
+          g.deadline_at < now()
+          OR (
+            cardinality(g.author_answers) >= jsonb_array_length(g.quiz->'questions')
+            AND (
+              g.mode = 'solo'
+              OR cardinality(g.rival_answers) >= jsonb_array_length(g.quiz->'questions')
+            )
+          )
+        )`,
+      )
       .limit(limit)
       .getRawMany<{ id: string }>();
     return rows.map((r) => r.id);
+  }
+
+  //Брошенные дуэли: созданы, но соперник так и не открыл ссылку
+  async deleteAbandonedCreated(olderThanDays = 7): Promise<number> {
+    const res = await this.repository
+      .createQueryBuilder()
+      .delete()
+      .from(GameEntity)
+      .where(
+        `status = 'created' AND created_at < now() - (:days * interval '1 day')`,
+        { days: olderThanDays },
+      )
+      .execute();
+    return res.affected ?? 0;
   }
 }

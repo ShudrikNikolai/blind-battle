@@ -9,9 +9,12 @@ import {
   renderQuestion,
   renderResult,
   renderSoloResult,
+  renderStats,
   SOLO_RE,
   soloData,
   startPayload,
+  TOPIC_RE,
+  topicData,
 } from '../utils/render';
 
 const GAME_ID = '3f2b8c1e-5a4d-4e7b-9c1a-2d6e8f0a1b3c';
@@ -26,6 +29,13 @@ describe('callback data', () => {
   it('rejects malformed data', () => {
     expect(ANSWER_RE.test('a:not-a-uuid:1:1')).toBe(false);
     expect(ANSWER_RE.test(`a:${GAME_ID}:x:1`)).toBe(false);
+  });
+
+  it('encodes a topic id within the Telegram limit', () => {
+    const data = topicData(GAME_ID);
+    expect(Buffer.byteLength(data)).toBeLessThanOrEqual(64);
+    expect(TOPIC_RE.exec(data)![1]).toBe(GAME_ID);
+    expect(TOPIC_RE.test('t:not-a-uuid')).toBe(false);
   });
 });
 
@@ -107,6 +117,45 @@ describe('results', () => {
     expect(renderResult('author', base, '<i>x</i>')).toContain(
       '&lt;i&gt;x&lt;/i&gt;',
     );
+  });
+});
+
+describe('stats', () => {
+  it('renders win/loss/draw counters and the total', () => {
+    const text = renderStats({
+      firstName: 'Вася',
+      wins: 3,
+      losses: 2,
+      draws: 1,
+    });
+
+    expect(text).toContain('Побед: <b>3</b>');
+    expect(text).toContain('Поражений: <b>2</b>');
+    expect(text).toContain('Ничьих: <b>1</b>');
+    expect(text).toContain('Всего игр: <b>6</b>');
+  });
+
+  it('shows an empty-state for a player without finished games', () => {
+    const text = renderStats({
+      firstName: 'Вася',
+      wins: 0,
+      losses: 0,
+      draws: 0,
+    });
+
+    expect(text).toContain('Пока нет завершённых игр');
+    expect(text).not.toContain('Всего игр');
+  });
+
+  it('escapes the player name', () => {
+    expect(
+      renderStats({
+        firstName: '<i>x</i>',
+        wins: 1,
+        losses: 0,
+        draws: 0,
+      }),
+    ).toContain('&lt;i&gt;x&lt;/i&gt;');
   });
 });
 

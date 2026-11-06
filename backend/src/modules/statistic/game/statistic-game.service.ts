@@ -12,6 +12,6 @@ export class StatisticGameService {
   constructor(private readonly repository: StatisticGameRepository) {}
 
   async save(data: IStatisticGame): Promise<void> {
-    await this.repository.create(data);
+    await this.repository.saveIfAbsent(data);
   }
 }

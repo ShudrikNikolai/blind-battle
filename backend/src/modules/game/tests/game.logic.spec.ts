@@ -6,7 +6,7 @@ import {
   isComplete,
   score,
 } from '../domain/game.domain';
-import { QuizSnapshot } from '@/modules/admin/ports/quiz.port';
+import { QuizSnapshot } from '@/common/contracts/quiz';
 
 const quiz: QuizSnapshot = {
   timeLimitSec: 60,

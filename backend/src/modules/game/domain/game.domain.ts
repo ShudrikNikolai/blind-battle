@@ -2,7 +2,7 @@ import type { GameWinner } from '../core/game.entity';
 import type { QuestionView } from '../dtos/game.dto';
 import type { GameMode } from '../core/game.entity';
 
-import { QuizSnapshot } from '../../admin/ports/quiz.port';
+import { QuizSnapshot } from '@/common/contracts/quiz';
 
 /** Верно/неверно по каждому вопросу. Без ответа = неверно. */
 export const correctness = (quiz: QuizSnapshot, answers: number[]): boolean[] =>

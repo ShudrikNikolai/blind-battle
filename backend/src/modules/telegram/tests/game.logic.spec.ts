@@ -1,4 +1,4 @@
-import { QuizSnapshot } from '@/modules/admin/ports/quiz.port';
+import { QuizSnapshot } from '@/common/contracts/quiz';
 import { everyoneDone } from '@/modules/game/domain/game.domain';
 
 const quiz: QuizSnapshot = {

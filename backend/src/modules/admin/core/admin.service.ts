@@ -49,18 +49,13 @@ export class AdminService {
     const admin = await this.repository.findOne({
       filter: { login: dto.login },
     });
+    console.log('SSS > ', { admin, dto });
+
     if (!admin) {
       this.logger.warn(`login failed ::: ${dto.login}`);
       return null;
     }
 
-    if (admin?.login === 'admin') {
-      const count = await this.repository.count();
-      this.logger.warn(`logged by deafult ::: ${count}`);
-
-      return count === 1 ? admin.getPublic() : null;
-    }
-    console.log('admin >>>0', admin);
     if (!(await this.credentials.verify(admin.passwordHash, dto.password))) {
       this.logger.warn(`login failed ::: ${dto.login}`);
       return null;

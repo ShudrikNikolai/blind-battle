@@ -8,7 +8,7 @@ import {
   type GameFinishedEvent,
   type GameStartedEvent,
 } from '@/common/events/game.event';
-import { UserService } from '@/modules/user/user.service';
+import { UserService } from '@/modules/user/core/user.service';
 import { GameService } from '@/modules/game/core/game.service';
 import { TelegramService } from '../core/telegram.service';
 import { TEXT } from '../utils/consts/texts';

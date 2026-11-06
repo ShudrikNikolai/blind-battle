@@ -79,6 +79,26 @@ describe('AdminService', () => {
         service.login({ login: 'root', password: 'wrong-pass' }),
       ).resolves.toBeNull();
     });
+
+    it('requires a password even for the sole default admin', async () => {
+      repo.findOne.mockResolvedValue(makeAdmin({ login: 'admin' }));
+      credentials.verify.mockResolvedValue(false);
+
+      await expect(
+        service.login({ login: 'admin', password: 'wrong-pass' }),
+      ).resolves.toBeNull();
+
+      expect(credentials.verify).toHaveBeenCalledWith('hash-old', 'wrong-pass');
+    });
+
+    it('logs the default admin in only with the correct password', async () => {
+      repo.findOne.mockResolvedValue(makeAdmin({ login: 'admin' }));
+      credentials.verify.mockResolvedValue(true);
+
+      await expect(
+        service.login({ login: 'admin', password: 'admin' }),
+      ).resolves.toEqual({ id: 'admin-1', login: 'admin' });
+    });
   });
 
   describe('createAdmin', () => {

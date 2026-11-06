@@ -13,7 +13,7 @@ export class CredentialService {
     }
     try {
       return await argon2.hash(raw);
-    } catch (error) {
+    } catch {
       throw new InternalServerErrorException('Failed to hash password');
     }
   }
@@ -22,9 +22,13 @@ export class CredentialService {
     if (!hash || !raw) {
       throw new BadRequestException('Hash and password are required');
     }
+
+    if (!hash.startsWith('$argon2')) {
+      return false;
+    }
     try {
       return await argon2.verify(hash, raw);
-    } catch (error) {
+    } catch {
       throw new InternalServerErrorException('Failed to verify password');
     }
   }

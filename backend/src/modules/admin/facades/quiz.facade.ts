@@ -3,9 +3,9 @@ import { QuizService } from '../quiz/quiz.service';
 import type {
   IQuizPort,
   QuizForGame,
-  QuizSnapshot,
   QuizSummary,
-} from '../ports/quiz.port';
+  QuizTagSummary,
+} from '@/common/contracts/quiz';
 
 @Injectable()
 export class QuizFacade implements IQuizPort {
@@ -18,15 +18,15 @@ export class QuizFacade implements IQuizPort {
     return this.quizService.listSummaries(limit);
   }
 
-  listQuizzes(cursor: string, limit: number): Promise<QuizSnapshot[] | null> {
-    throw new Error('Method not implemented.');
-  }
-
   findPublishedById(id: string): Promise<QuizForGame | null> {
     return this.quizService.findPublishedForGame(id);
   }
 
-  getRandomPublished(): Promise<QuizForGame | null> {
-    return this.quizService.getRandomPublishedForGame();
+  getRandomPublished(tagId?: string): Promise<QuizForGame | null> {
+    return this.quizService.getRandomPublishedForGame(tagId);
+  }
+
+  listPublishedTopics(): Promise<QuizTagSummary[]> {
+    return this.quizService.listPublishedTopics();
   }
 }

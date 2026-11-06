@@ -8,11 +8,13 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Max,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { TagDto } from './tag.dto';
 
 const QUIZ_CONTENT_EXAMPLE = {
   timeLimitSec: 120,
@@ -85,6 +87,13 @@ export class CreateQuizDto {
   @ValidateNested()
   @Type(() => QuizContentDto)
   content: QuizContentDto;
+
+  @ApiProperty({
+    format: 'uuid',
+    description: 'ID опубликованного тега',
+  })
+  @IsUUID()
+  tagId: string;
 }
 
 export class UpdateQuizDto extends PartialType(CreateQuizDto) {}
@@ -135,6 +144,12 @@ export class QuizDto {
 
   @ApiProperty()
   isPublished: boolean;
+
+  @ApiProperty({ format: 'uuid' })
+  tagId: string;
+
+  @ApiProperty({ type: TagDto, nullable: true })
+  tag: TagDto | null;
 
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt: Date;

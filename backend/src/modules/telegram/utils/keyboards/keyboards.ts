@@ -1,8 +1,8 @@
 import { Markup } from 'telegraf';
 import type { QuestionView } from '@/modules/game/dtos/game.dto';
 import { TEXT } from '../consts/texts';
-import { answerData, soloData } from '../render';
-import { QuizSummary } from '@/modules/admin/ports/quiz.port';
+import { answerData, soloData, topicData } from '../render';
+import { QuizSummary, QuizTagSummary } from '@/common/contracts/quiz';
 
 export const contactKeyboard = () =>
   Markup.keyboard([[Markup.button.contactRequest('📱 Поделиться номером')]])
@@ -33,5 +33,12 @@ export const soloKeyboard = (quizzes: QuizSummary[]) =>
         `${q.isPublished ? '🟢' : '⚪'} ${q.title}`.slice(0, 60),
         soloData(q.id),
       ),
+    ]),
+  );
+
+export const topicsKeyboard = (topics: QuizTagSummary[]) =>
+  Markup.inlineKeyboard(
+    topics.map((topic) => [
+      Markup.button.callback(topic.name.slice(0, 60), topicData(topic.id)),
     ]),
   );
