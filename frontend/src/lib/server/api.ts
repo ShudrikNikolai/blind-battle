@@ -48,7 +48,8 @@ export function createApi(event: RequestEvent) {
   return {
     get: <T>(path: string) => request<T>('GET', path),
     post: <T = unknown>(path: string, body?: unknown) => request<T>('POST', path, body),
-    patch: <T = unknown>(path: string, body?: unknown) => request<T>('PATCH', path, body)
+    patch: <T = unknown>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+    del: <T = unknown>(path: string) => request<T>('DELETE', path)
   };
 }
 

@@ -4,7 +4,7 @@
 
 ## Стек
 
-- SvelteKit 2 + Svelte 5 (runes), TypeScript
+- SvelteKit 3 + Svelte 5 (runes), TypeScript
 - `@sveltejs/adapter-node`
 - Docker (multi-stage)
 
@@ -12,7 +12,8 @@
 
 - Вход по логину и паролю, выход
 - Список квизов с пагинацией, публикация и снятие с публикации
-- Создание и редактирование квиза (вопросы, варианты ответов, лимит времени)
+- Создание и редактирование квиза (тема, вопросы, варианты ответов, лимит времени)
+- Управление темами: создание, переименование, публикация и мягкое удаление
 - Смена пароля, создание нового админа
 
 ## Быстрый старт
@@ -21,29 +22,29 @@
 
 ```bash
 cp .env.example .env
-npm ci
-npm run dev
+yarn install --frozen-lockfile
+yarn dev
 ```
 
 Приложение откроется на http://localhost:5173.
 
-| Команда           | Что делает                    |
-| ----------------- | ----------------------------- |
-| `npm run dev`     | dev-сервер                    |
-| `npm run build`   | production-сборка в `build/`  |
-| `npm start`       | запуск собранного приложения  |
-| `npm run check`   | проверка типов (svelte-check) |
+| Команда      | Что делает                    |
+| ------------ | ----------------------------- |
+| `yarn dev`   | dev-сервер                    |
+| `yarn build` | production-сборка в `build/`  |
+| `yarn start` | запуск собранного приложения  |
+| `yarn check` | проверка типов (svelte-check) |
 
 ## Переменные окружения
 
 Читаются на сервере во время старта (`$env/dynamic/private`), в браузер не попадают.
 
-| Переменная            | По умолчанию            | Описание                                       |
-| --------------------- | ----------------------- | ---------------------------------------------- |
-| `API_URL`             | `http://localhost:3000` | Адрес NestJS-бэкенда                           |
-| `API_PREFIX`          | `/api/v1`               | Глобальный префикс бэкенда                     |
-| `SESSION_COOKIE_NAME` | `connect.sid`           | Имя куки `express-session`                     |
-| `ORIGIN`              | не задан                | Публичный адрес фронта (обязателен в проде)    |
+| Переменная            | По умолчанию            | Описание                                    |
+| --------------------- | ----------------------- | ------------------------------------------- |
+| `API_URL`             | `http://localhost:3000` | Адрес NestJS-бэкенда                        |
+| `API_PREFIX`          | `/api/v1`               | Глобальный префикс бэкенда                  |
+| `SESSION_COOKIE_NAME` | `connect.sid`           | Имя куки `express-session`                  |
+| `ORIGIN`              | не задан                | Публичный адрес фронта (обязателен в проде) |
 
 ## Как устроена авторизация
 
@@ -59,18 +60,24 @@ npm run dev
 
 Все пути указаны относительно `API_PREFIX`. Ответы ожидаются в формате `IApiResponse` (см. `src/lib/types/api.ts`).
 
-| Метод | Путь                  | Назначение                |
-| ----- | --------------------- | ------------------------- |
-| POST  | `/admin/login`        | вход (`{login, password}`) |
-| POST  | `/admin/logout`       | выход                     |
-| GET   | `/admin/me`           | текущий админ             |
-| PATCH | `/admin/upd-pass`     | смена пароля              |
-| POST  | `/admin/new-admin`    | создание админа           |
-| GET   | `/quiz/all`           | список квизов (`page`, `limit`) |
-| GET   | `/quiz/:id`           | один квиз                 |
-| POST  | `/quiz`               | создание квиза            |
-| PATCH | `/quiz/:id`           | обновление квиза          |
-| PATCH | `/quiz/:id/publish`   | публикация (`{isPublished}`) |
+| Метод  | Путь                | Назначение                                    |
+| ------ | ------------------- | --------------------------------------------- |
+| POST   | `/admin/login`      | вход (`{login, password}`)                    |
+| POST   | `/admin/logout`     | выход                                         |
+| GET    | `/admin/me`         | текущий админ                                 |
+| PATCH  | `/admin/upd-pass`   | смена пароля                                  |
+| POST   | `/admin/new-admin`  | создание админа                               |
+| POST   | `/tag`              | создание тега                                 |
+| GET    | `/tag/all`          | список тегов (`page`, `limit`, `isPublished`) |
+| GET    | `/tag/:id`          | один тег                                      |
+| PATCH  | `/tag/:id`          | переименование тега                           |
+| PATCH  | `/tag/:id/publish`  | публикация тега (`{isPublished}`)             |
+| DELETE | `/tag/:id`          | мягкое удаление тега                          |
+| GET    | `/quiz/all`         | список квизов (`page`, `limit`)               |
+| GET    | `/quiz/:id`         | один квиз                                     |
+| POST   | `/quiz`             | создание квиза (`tagId` обязателен)           |
+| PATCH  | `/quiz/:id`         | обновление квиза                              |
+| PATCH  | `/quiz/:id/publish` | публикация (`{isPublished}`)                  |
 
 ## Структура
 
@@ -86,6 +93,7 @@ src/
     ├── logout/                # POST: выход
     └── (app)/                 # приватная группа
         ├── dashboard/         # список квизов
+        ├── tags/              # CRUD/publish тегов
         ├── quiz/new/          # создание
         ├── quiz/[id]/         # редактирование
         └── settings/          # пароль и новый админ
@@ -110,5 +118,5 @@ docker run -d -p 3000:3000 \
 
 - **`ORIGIN`** должен точно совпадать с адресом в браузере, включая схему. Без него SvelteKit блокирует POST-формы с ошибкой `Cross-site POST form submissions are forbidden`. Если прокси выставляет заголовки, можно использовать `PROTOCOL_HEADER=x-forwarded-proto` и `HOST_HEADER=x-forwarded-host`.
 - **`API_URL`** внутри Docker-сети указывает на сервис бэкенда (`http://backend:3000`), а не на `localhost`.
-- Если бэкенд стоит за nginx и использует `cookie.secure: true`, на нём нужен `app.set('trust proxy', 1)`, иначе кука не выставится.
+- Если бэкенд стоит за angie и использует `cookie.secure: true`, на нём нужен `app.set('trust proxy', 1)`, иначе кука не выставится.
 - Сессии хранятся на стороне бэкенда, фронтенд stateless и масштабируется репликами.

@@ -1,14 +1,15 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import FormErrors from './FormErrors.svelte';
-  import type { QuizContent } from '#lib/types/api.ts';
+  import type { QuizContent, Tag } from '#lib/types/api.ts';
 
   type Props = {
-    initial?: { title: string; content: QuizContent };
+    initial?: { title: string; content: QuizContent; tagId?: string };
+    tags: Tag[];
     form?: { message?: string; details?: unknown[]; saved?: boolean } | null;
     submitLabel?: string;
   };
-  let { initial, form, submitLabel = 'Сохранить' }: Props = $props();
+  let { initial, tags, form, submitLabel = 'Сохранить' }: Props = $props();
 
   const emptyQuestion = () => ({
     question: '',
@@ -26,9 +27,19 @@
   let timeLimitSec = $state(initial?.content.timeLimitSec ?? 60);
   // svelte-ignore state_referenced_locally
   let questions = $state(initial ? clone(initial.content.questions) : [emptyQuestion()]);
+  // svelte-ignore state_referenced_locally
+  const defaultTag = tags.find((tag) => tag.name.toLowerCase() === 'без темы') ?? tags[0];
+  // svelte-ignore state_referenced_locally
+  const initialTagId =
+    initial?.tagId && tags.some((tag) => tag.id === initial.tagId)
+      ? initial.tagId
+      : (defaultTag?.id ?? '');
+  let tagId = $state(initialTagId);
+  // svelte-ignore state_referenced_locally
+  const initialTagMissing = !!initial?.tagId && !tags.some((tag) => tag.id === initial.tagId);
   let saving = $state(false);
 
-  const payload = $derived(JSON.stringify({ title, content: { questions, timeLimitSec } }));
+  const payload = $derived(JSON.stringify({ title, content: { questions, timeLimitSec }, tagId }));
 
   const setCorrect = (qi: number, bi: number) =>
     questions[qi].buttons.forEach((b, i) => (b.isCorrectAnswer = i === bi));
@@ -70,13 +81,33 @@
     <input type="number" bind:value={timeLimitSec} min="10" max="3600" required />
   </label>
 
-  {#each questions as q, qi}
+  <label>
+    Тема
+    <select bind:value={tagId} required disabled={tags.length === 0}>
+      {#each tags as tag (tag.id)}
+        <option value={tag.id}>{tag.name}</option>
+      {/each}
+    </select>
+  </label>
+  {#if tags.length === 0}
+    <p class="error">Нет опубликованных тегов. Сначала опубликуй тег в разделе «Теги».</p>
+  {:else if initialTagMissing}
+    <p class="error">
+      Текущая тема недоступна. Выбери опубликованный тег, иначе квиз нельзя сохранить.
+    </p>
+  {/if}
+
+  {#each questions as q, qi (qi)}
     <fieldset class="q">
       <legend>Вопрос {qi + 1}</legend>
-      <textarea bind:value={q.question} maxlength="500" rows="2" placeholder="Текст вопроса" required
-      ></textarea>
+      <textarea
+        bind:value={q.question}
+        maxlength="500"
+        rows="2"
+        placeholder="Текст вопроса"
+        required></textarea>
 
-      {#each q.buttons as b, bi}
+      {#each q.buttons as b, bi (bi)}
         <div class="row">
           <input
             type="radio"
@@ -86,17 +117,26 @@
             title="Правильный ответ"
           />
           <input bind:value={b.text} maxlength="64" placeholder={`Вариант ${bi + 1}`} required />
-          <button type="button" class="ghost" onclick={() => removeButton(qi, bi)}
+          <button
+            type="button"
+            class="ghost"
+            onclick={() => removeButton(qi, bi)}
             disabled={q.buttons.length <= 2}>✕</button
           >
         </div>
       {/each}
 
       <div class="row">
-        <button type="button" class="ghost" onclick={() => addButton(qi)}
+        <button
+          type="button"
+          class="ghost"
+          onclick={() => addButton(qi)}
           disabled={q.buttons.length >= 4}>+ вариант</button
         >
-        <button type="button" class="ghost" onclick={() => removeQuestion(qi)}
+        <button
+          type="button"
+          class="ghost"
+          onclick={() => removeQuestion(qi)}
           disabled={questions.length <= 1}>Удалить вопрос</button
         >
       </div>
@@ -110,5 +150,7 @@
   <FormErrors message={form?.message} details={form?.details} />
   {#if form?.saved}<p style="color:#2f9e44;margin:0">Сохранено</p>{/if}
 
-  <button type="submit" disabled={saving}>{saving ? 'Сохраняем…' : submitLabel}</button>
+  <button type="submit" disabled={saving || tags.length === 0}>
+    {saving ? 'Сохраняем…' : submitLabel}
+  </button>
 </form>

@@ -25,12 +25,24 @@
 
     <label>
       Логин
-      <input name="login" autocomplete="username" required maxlength="64" value={form?.login ?? ''} />
+      <input
+        name="login"
+        autocomplete="username"
+        required
+        maxlength="64"
+        value={form?.login ?? ''}
+      />
     </label>
 
     <label>
       Пароль
-      <input name="password" type="password" autocomplete="current-password" required maxlength="128" />
+      <input
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        required
+        maxlength="128"
+      />
     </label>
 
     <FormErrors message={form?.message} details={form?.details} />

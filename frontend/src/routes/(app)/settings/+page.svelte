@@ -14,11 +14,24 @@
     <h2 style="margin:0">Смена пароля</h2>
     <label>
       Текущий пароль
-      <input name="oldPassword" type="password" autocomplete="current-password" required maxlength="128" />
+      <input
+        name="oldPassword"
+        type="password"
+        autocomplete="current-password"
+        required
+        maxlength="128"
+      />
     </label>
     <label>
       Новый пароль (от 8 символов)
-      <input name="newPassword" type="password" autocomplete="new-password" required minlength="8" maxlength="128" />
+      <input
+        name="newPassword"
+        type="password"
+        autocomplete="new-password"
+        required
+        minlength="8"
+        maxlength="128"
+      />
     </label>
     {#if form?.form === 'password'}
       {#if 'ok' in form}<p style="color:#2f9e44;margin:0">Пароль изменён</p>{/if}
@@ -35,7 +48,14 @@
     </label>
     <label>
       Пароль (от 8 символов)
-      <input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="128" />
+      <input
+        name="password"
+        type="password"
+        autocomplete="new-password"
+        required
+        minlength="8"
+        maxlength="128"
+      />
     </label>
     {#if form?.form === 'admin'}
       {#if 'ok' in form}<p style="color:#2f9e44;margin:0">Админ создан</p>{/if}

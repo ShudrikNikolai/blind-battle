@@ -6,8 +6,8 @@ export const POST: RequestHandler = async (event) => {
   // сессию на бэкенде гасим, но куку удаляем в любом случае
   try {
     await createApi(event).post('/admin/logout');
-  } catch (e) {
-    console.error('failed', e)
+  } catch {
+    //
   }
 
   event.cookies.delete(config.cookieName, { path: '/' });

@@ -1,4 +1,4 @@
-export type ValidationDetail = string | { field?: string; message: string; };
+export type ValidationDetail = string | { field?: string; message: string };
 export type Order = 'ASC' | 'DESC';
 
 export interface IApiError {
@@ -58,10 +58,19 @@ export interface QuizContent {
   timeLimitSec: number; // 10..3600
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  isPublished: boolean;
+  createdAt: string;
+}
+
 export interface Quiz {
   id: string;
   title: string;
   content: QuizContent;
   isPublished: boolean;
+  tagId: string;
+  tag?: Tag | null;
   createdAt: string;
 }

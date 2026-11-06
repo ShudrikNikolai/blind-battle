@@ -18,7 +18,7 @@
     <p style="margin:0">{message}</p>
     {#if details.length}
       <ul style="margin:.25rem 0 0; padding-left:1.1rem">
-        {#each details as d}<li>{fmt(d)}</li>{/each}
+        {#each details as d, i (i)}<li>{fmt(d)}</li>{/each}
       </ul>
     {/if}
   </div>

@@ -1,6 +1,6 @@
 {
-	"extends": "$app/tsconfig",
-	"compilerOptions": {
+  "extends": "$app/tsconfig",
+  "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
     "esModuleInterop": true,
@@ -10,7 +10,7 @@
     "sourceMap": true,
     "strict": true,
     "moduleResolution": "bundler",
-		"types": ["$app/types", "node"]
-	},
-	"include": ["src", "vite.config.ts"]
+    "types": ["$app/types", "node"]
+  },
+  "include": ["src", "vite.config.ts"]
 }

@@ -1,12 +1,15 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import type { IApiResponse, Quiz } from '#lib/types/api.ts';
+import type { IApiResponse, IPaginatedResponse, Quiz, Tag } from '#lib/types/api.ts';
 import { apiFail, createApi, orError } from '#lib/server/api.ts';
 
 export const load: PageServerLoad = async (event) => {
-  const res = await orError(createApi(event).get<IApiResponse<Quiz>>(`/quiz/${event.params.id}`));
-  console.log('res >>>', res)
-  return { quiz: res.data! };
+  const [quiz, tags] = await Promise.all([
+    orError(createApi(event).get<IApiResponse<Quiz>>(`/quiz/${event.params.id}`)),
+    orError(createApi(event).get<IPaginatedResponse<Tag>>('/tag/all?isPublished=true&limit=100'))
+  ]);
+
+  return { quiz: quiz.data!, tags: tags.data };
 };
 
 export const actions: Actions = {

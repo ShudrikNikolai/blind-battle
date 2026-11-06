@@ -1,7 +1,15 @@
 import { fail, redirect } from '@sveltejs/kit';
-import type { Actions } from './$types';
-import type { IApiResponse, Quiz } from '#lib/types/api.ts';
-import { apiFail, createApi } from '#lib/server/api.ts';
+import type { Actions, PageServerLoad } from './$types';
+import type { IApiResponse, IPaginatedResponse, Quiz, Tag } from '#lib/types/api.ts';
+import { apiFail, createApi, orError } from '#lib/server/api.ts';
+
+export const load: PageServerLoad = async (event) => {
+  const tags = await orError(
+    createApi(event).get<IPaginatedResponse<Tag>>('/tag/all?isPublished=true&limit=100')
+  );
+
+  return { tags: tags.data };
+};
 
 export const actions: Actions = {
   default: async (event) => {
