@@ -6,13 +6,26 @@ x-logging: &logging
     max-size: "10m"
     max-file: "3"
 
+# Базовые настройки безопасности для всех сервисов
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop: [ALL]
+
 services:
   angie:
+    <<: *hardening
     image: docker.angie.software/angie:${ANGIE_TAG:-1.11.2-alpine}
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
+    cap_add: [NET_BIND_SERVICE, CHOWN, SETGID, SETUID]  # привилегированные порты и смена пользователя воркеров
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/angie
+      - /run
     volumes:
       - ../angie/angie.conf:/etc/angie/angie.conf:ro
       - ../angie/snippets:/etc/angie/snippets:ro
@@ -20,10 +33,13 @@ services:
       - angie_acme:/var/lib/angie/acme
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
       frontend:
-        condition: service_started
-    networks: [edge]
+        condition: service_healthy
+    networks: [edge, app]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
       interval: 10s
@@ -32,10 +48,14 @@ services:
     logging: *logging
 
   backend:
+    <<: *hardening
     build:
       context: ../backend
     restart: unless-stopped
     init: true
+    read_only: true
+    tmpfs:
+      - /tmp
     stop_grace_period: 30s
     env_file:
       - ./env/.env.backend
@@ -45,9 +65,9 @@ services:
       DB_PORT: "5432"
       BULLMQ_HOST: redis
       BULLMQ_PORT: "6379"
-      DB_USERNAME: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER:?POSTGRES_USER is required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_DATABASE: ${POSTGRES_DB:?POSTGRES_DB is required}
     expose:
       - "3000"
     depends_on:
@@ -55,7 +75,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [edge, data]
+    networks: [app, data]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000${BACKEND_HEALTH_PATH:-/api/v1/health}').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -65,10 +88,14 @@ services:
     logging: *logging
 
   frontend:
+    <<: *hardening
     build:
       context: ../frontend
     restart: unless-stopped
     init: true
+    read_only: true
+    tmpfs:
+      - /tmp
     env_file:
       - ./env/.env.frontend
     environment:
@@ -80,7 +107,10 @@ services:
       SESSION_COOKIE_NAME: connect.sid
     expose:
       - "3000"
-    networks: [edge]
+    networks: [app]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
       interval: 10s
@@ -90,28 +120,48 @@ services:
     logging: *logging
 
   postgres:
+    security_opt:
+      - no-new-privileges:true
     image: postgres:17-alpine
     restart: unless-stopped
+    shm_size: 128mb
     env_file:
       - ./env/.env.postgres
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./scripts:/docker-entrypoint-initdb.d:ro
     networks: [data]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 20s
     logging: *logging
 
   redis:
+    <<: *hardening
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    user: redis
+    read_only: true
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redis_data:/data
     networks: [data]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 320M }
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -119,12 +169,112 @@ services:
       retries: 10
     logging: *logging
 
+  # monitoring
+
+  loki:
+    <<: *hardening
+    image: grafana/loki:${LOKI_TAG:-3.7.1}
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ../monitoring/loki:/etc/loki:ro
+      - loki_data:/loki
+    networks: [monitoring]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 1G }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    logging: *logging
+
+  alloy:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    image: grafana/alloy:${ALLOY_TAG:-v1.20.1}
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      DEPLOY_ENV: ${DEPLOY_ENV:-dev}
+      LOKI_PUSH_URL: ${LOKI_PUSH_URL:-http://loki:3100/loki/api/v1/push}
+    volumes:
+      - ../monitoring/alloy:/etc/alloy:ro
+      - alloy_data:/var/lib/alloy/data  # позиции чтения: после рестарта логи не дублируются
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks: [monitoring]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 192M }
+    logging: *logging
+
+  grafana:
+    <<: *hardening
+    image: grafana/grafana:${GRAFANA_TAG:-13.0.10}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      ALERT_TELEGRAM_BOT_TOKEN: ${ALERT_TELEGRAM_BOT_TOKEN:?ALERT_TELEGRAM_BOT_TOKEN is required}
+      ALERT_TELEGRAM_CHAT_ID: ${ALERT_TELEGRAM_CHAT_ID:?ALERT_TELEGRAM_CHAT_ID is required}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../monitoring/grafana/alerting:/etc/grafana/provisioning/alerting:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks: [monitoring, egress]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384M }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    logging: *logging
+
 networks:
-  edge: {}
+  edge: {}          # публичный вход: только angie
+  app:
+    internal: true  # angie <-> backend/frontend, без выхода в интернет
   data:
-    internal: true
+    internal: true  # postgres, redis
+  monitoring:
+    internal: true  # loki, alloy, grafana
+  egress: {}        # исходящий доступ в интернет для grafana
 
 volumes:
   pg_data:
   redis_data:
   angie_acme:
+  loki_data:
+  alloy_data:
+  grafana_data:
